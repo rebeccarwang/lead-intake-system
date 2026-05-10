@@ -3,8 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const ALLOWED_SOURCES = ["Google", "Referral", "Social", "Other"];
 
-// REPLACE PLACEHOLDER URL
-const WEBHOOK_URL = "https://my_placeholder.com";
+const WEBHOOK_URL = "https://webhook-receiver-flax.vercel.app/api/lead-webhook";
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
@@ -58,7 +57,7 @@ function validate(body: unknown): { ok: true; data: LeadInput } | { ok: false; e
     return { ok: false, error: "A valid email is required." };
   }
 
-  const source = typeof b.source === "string" ? b.source : "";
+  const source = typeof b.source === "string" ? b.source.trim() : "";
   if (!ALLOWED_SOURCES.includes(source)) {
     return {
       ok: false,
