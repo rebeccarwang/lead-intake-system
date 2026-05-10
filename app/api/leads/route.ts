@@ -5,18 +5,20 @@ const ALLOWED_SOURCES = ["Google", "Referral", "Social", "Other"];
 
 // REPLACE PLACEHOLDER URL
 const WEBHOOK_URL = "https://my_placeholder.com";
+
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
+const TIMEOUT_MS = 10_000;
 
 type LeadInput = {
   full_name: string;
   email: string;
   company?: string | null;
-  source: Source;
+  source: string;
   message?: string | null;
 };
 
 
-// creates supabaseAnon
 function getSupabaseAnon() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -27,10 +29,9 @@ function getSupabaseAnon() {
 }
 
 
-// creates supabaseAdmin
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const adminKey = process.env.SUPABASE_SERVICE_ADMIN_KEY;
+  const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !adminKey) {
     throw new Error("Supabase environment variables are not configured for admin");
   }
@@ -108,57 +109,61 @@ export async function POST(req: Request) {
     );
   }
 
-  // inserts lead
+  // inserts validated lead into database
   const { data: lead, error: insertError } = await supabaseAnon
     .from("leads")
     .insert(result.data)
     .select()
-    .single();
+    .single()
+    .abortSignal(AbortSignal.timeout(TIMEOUT_MS));
+
+  if (insertError?.code === "23505") {
+    return NextResponse.json(
+      { error: "A submission with this email already exists." },
+      { status: 409 }
+    );
+  }
 
   if (insertError || !lead) {
     console.error("Supabase insert failed:", insertError);
     return NextResponse.json(
-      { error: "Unable to submit form right now." },
+      { error: "Unable to submit form right now. Please try again." },
       { status: 500 }
     );
   }
 
-  // attempts to POST lead data server-side to webhook endpoint
+  // POSTs lead to webhook with timeout; failures are logged but don't fail the request
+  let webhookError: string | null = null;
   try {
-    const webhookRes = await fetch(WEBHOOK_URL, {
+    const res = await fetch(WEBHOOK_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Candidate-Name": process.env.CANDIDATE_NAME ?? "",
       },
       body: JSON.stringify(lead),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-
-    if (!webhookRes.ok) {
-      throw new Error(`Webhook responded with status ${webhookRes.status}`);
-    }
-
-    const { error: updateError } = await supabaseAdmin
-      .from("leads")
-      .update({ webhook_status: "sent" })
-      .eq("id", lead.id);
-
-    if (updateError) {
-      console.error("Failed to update webhook_status to sent:", updateError);
-    }
+    if (!res.ok) throw new Error(`Webhook responded with status ${res.status}`);
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error("Webhook delivery failed:", errorMessage);
-
-    const { error: updateError } = await supabaseAdmin
-      .from("leads")
-      .update({ webhook_status: "failed", webhook_error: errorMessage })
-      .eq("id", lead.id);
-
-    if (updateError) {
-      console.error("Failed to update webhook_status to failed:", updateError);
-    }
+    webhookError = err instanceof Error ? err.message : String(err);
+    console.error("Webhook delivery failed:", webhookError);
   }
 
+  const statusUpdate = webhookError
+    ? { webhook_status: "failed", webhook_error: webhookError }
+    : { webhook_status: "sent" };
+
+  const { error: updateError } = await supabaseAdmin
+    .from("leads")
+    .update(statusUpdate)
+    .eq("id", lead.id)
+    .abortSignal(AbortSignal.timeout(TIMEOUT_MS));
+
+  if (updateError) {
+    console.error("Failed to update webhook_status:", updateError);
+  }
+
+  // return success code to user regardless of webhook outcome
   return NextResponse.json({ ok: true, lead }, { status: 201 });
 }
