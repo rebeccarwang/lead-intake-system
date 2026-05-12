@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const ALLOWED_SOURCES = ["Google", "Referral", "Social", "Other"];
 
-const WEBHOOK_URL = "https://webhook-receiver-flax.vercel.app/api/lead-webhook";
+const WEBHOOK_URL = process.env.WEBHOOK_URL;
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
@@ -140,7 +140,7 @@ export async function POST(req: Request) {
         "Content-Type": "application/json",
         "X-Candidate-Name": process.env.CANDIDATE_NAME ?? "",
       },
-      body: JSON.stringify(lead),
+      body: JSON.stringify(result.data),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`Webhook responded with status ${res.status}`);
