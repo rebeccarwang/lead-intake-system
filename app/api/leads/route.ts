@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const ALLOWED_SOURCES = ["Google", "Referral", "Social", "Other"];
 
-const WEBHOOK_URL = process.env.WEBHOOK_URL;
+const WEBHOOK_URL = "https://webhook-receiver-flax.vercel.app/api/lead-webhook";
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
@@ -16,16 +16,6 @@ type LeadInput = {
   source: string;
   message?: string | null;
 };
-
-
-function getSupabaseAnon() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) {
-    throw new Error("Supabase environment variables are not configured for anon");
-  }
-  return createClient(url, anonKey);
-}
 
 
 function getSupabaseAdmin() {
@@ -94,11 +84,9 @@ export async function POST(req: Request) {
 
 
   // checks environment variables exist
-  let supabaseAnon;
   let supabaseAdmin;
 
   try {
-    supabaseAnon = getSupabaseAnon();
     supabaseAdmin = getSupabaseAdmin();
   } catch (err) {
     console.error("Supabase config error:", err);

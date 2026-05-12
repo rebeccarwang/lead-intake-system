@@ -51,7 +51,7 @@ export default function Home() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  function update(key: string, value: string) {
+  function update(key: keyof FormState, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
     if (errors[key]) {
       setErrors((prev) => ({ ...prev, [key]: undefined }));
