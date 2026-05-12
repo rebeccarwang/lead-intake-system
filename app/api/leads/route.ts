@@ -113,8 +113,8 @@ export async function POST(req: Request) {
     .from("leads")
     .insert(result.data)
     .select()
-    .single()
-    .abortSignal(AbortSignal.timeout(TIMEOUT_MS));
+    .abortSignal(AbortSignal.timeout(TIMEOUT_MS))
+    .single();
 
   if (insertError?.code === "23505") {
     return NextResponse.json(
