@@ -109,7 +109,7 @@ export async function POST(req: Request) {
   }
 
   // inserts validated lead into database
-  const { data: lead, error: insertError } = await supabaseAnon
+  const { data: lead, error: insertError } = await supabaseAdmin
     .from("leads")
     .insert(result.data)
     .select()
