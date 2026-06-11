@@ -1,9 +1,9 @@
-# Lead Capture
+# Lead Intake System
 
-A small Next.js app that captures leads from a public form, saves them to Supabase, and forwards each submission to an external webhook.
+A small full-stack lead intake application built with Next.js, Supabase, and TypeScript. Users can submit leads through a public form, leads are persisted to Postgres, and each submission is forwarded to an external webhook for downstream processing.
 
-- **Live app:** https://lead-capture-pearl-rho.vercel.app/
-- **Repo:** https://github.com/rebeccarwang/lead-capture
+- **Live app:** https://lead-intake-system-pearl-rho.vercel.app/
+- **Repo:** https://github.com/rebeccarwang/lead-intake-system
 
 ## Stack
 
@@ -25,8 +25,8 @@ A small Next.js app that captures leads from a public form, saves them to Supaba
 ### 1. Install
 
 ```bash
-git clone https://github.com/rebeccarwang/lead-capture.git
-cd lead-capture
+git clone https://github.com/rebeccarwang/lead-intake-system.git
+cd lead-intake-system
 npm install
 ```
 
@@ -62,16 +62,16 @@ Create `.env.local` in the project root:
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service_role key from Project Settings → API>
-CANDIDATE_NAME=Your Full Name
+WEBHOOK_URL=<URL the API route forwards each lead to>
 ```
 
 | Variable | Notes |
 | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL. |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Secret** — server-only. Bypasses RLS, so never expose it to the client. |
-| `CANDIDATE_NAME` | Sent as the `X-Candidate-Name` header on webhook calls. |
+| `WEBHOOK_URL` | Endpoint each new lead is forwarded to. If unset, leads are still saved but recorded with a `webhook_error` so they can be retried. |
 
-The webhook URL is hardcoded in `app/api/leads/route.ts` since it's a fixed value defined by the spec.
+When deploying to Vercel, set all three in the project's environment variables — `SUPABASE_SERVICE_ROLE_KEY` and `WEBHOOK_URL` should not be exposed to the browser.
 
 ### 4. Run
 
@@ -87,10 +87,10 @@ Open <http://localhost:3000> for the form and <http://localhost:3000/leads> for 
 - **Validation happens on both sides.** Client-side validation provides fast feedback in the UI; the API route re-validates everything before touching the database — the server is the real boundary.
 - **Webhook is a side effect.** The lead is saved first, then forwarded to the webhook. If the webhook fails (or times out), the user still gets a successful response and the failure is logged and recorded on the lead row in the database (`webhook_status`, `webhook_error`).
 - **Timeouts.** Supabase calls and the webhook fetch all use a 10-second `AbortSignal.timeout` so a hung dependency can't pin the function open.
-- **Webhook payload is minimal.** Only `full_name`, `email`, `company`, `source`, and `submitted date` are forwarded, not the full DB row.
+- **Webhook payload is minimal.** Only `full_name`, `email`, `company`, `source`, and `message` are forwarded, not the full DB row.
 
 ## Things to know
 
 - Duplicate emails return `409`, driven by the `unique` constraint on `email`.
 - `/leads` uses `export const dynamic = "force-dynamic"` so the table always reflects the latest data.
-- The leads table is intentionally minimal — no pagination, search, or filtering.
+- The leads table is kept minimal for now — no pagination, search, or filtering yet.

@@ -3,8 +3,6 @@ import { createClient } from "@supabase/supabase-js";
 
 const ALLOWED_SOURCES = ["Google", "Referral", "Social", "Other"];
 
-const WEBHOOK_URL = "https://webhook-receiver-flax.vercel.app/api/lead-webhook";
-
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
 const TIMEOUT_MS = 10_000;
@@ -119,22 +117,28 @@ export async function POST(req: Request) {
     );
   }
 
-  // POSTs lead to webhook with timeout; failures are logged but don't fail the request
+  // POSTs lead to webhook with timeout; failures (including missing config) are
+  // logged and recorded on the lead row but never fail the request
   let webhookError: string | null = null;
-  try {
-    const res = await fetch(WEBHOOK_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Candidate-Name": process.env.CANDIDATE_NAME ?? "",
-      },
-      body: JSON.stringify(result.data),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    if (!res.ok) throw new Error(`Webhook responded with status ${res.status}`);
-  } catch (err) {
-    webhookError = err instanceof Error ? err.message : String(err);
-    console.error("Webhook delivery failed:", webhookError);
+  const webhookUrl = process.env.WEBHOOK_URL;
+  if (!webhookUrl) {
+    webhookError = "WEBHOOK_URL env variable is not set";
+    console.error("Webhook delivery skipped:", webhookError);
+  } else {
+    try {
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(result.data),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+      if (!res.ok) throw new Error(`Webhook responded with status ${res.status}`);
+    } catch (err) {
+      webhookError = err instanceof Error ? err.message : String(err);
+      console.error("Webhook delivery failed:", webhookError);
+    }
   }
 
   const statusUpdate = webhookError
